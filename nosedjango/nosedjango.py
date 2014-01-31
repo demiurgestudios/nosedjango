@@ -102,6 +102,7 @@ class NoseDjango(Plugin):
             '--reuse-db',
             help=('Reuse the existing test database, rather than creating '
                   'and dropping it between runs'),
+            action='store_true',
             metavar='SETTINGS',
         )
         super(NoseDjango, self).options(parser, env)
