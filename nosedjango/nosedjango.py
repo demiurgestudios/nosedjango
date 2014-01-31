@@ -98,6 +98,12 @@ class NoseDjango(Plugin):
             help='Use custom Django settings module.',
             metavar='SETTINGS',
         )
+        parser.add_option(
+            '--reuse-db',
+            help=('Reuse the existing test database, rather than creating '
+                  'and dropping it between runs'),
+            metavar='SETTINGS',
+        )
         super(NoseDjango, self).options(parser, env)
 
     def configure(self, options, conf):
@@ -108,6 +114,11 @@ class NoseDjango(Plugin):
             self.settings_module = os.environ['DJANGO_SETTINGS_MODULE']
         else:
             self.settings_module = 'settings'
+
+        if options.reuse_db:
+            self.reuse_db = options.reuse_db
+        else:
+            self.reuse_db = False
 
         super(NoseDjango, self).configure(options, conf)
 
@@ -182,13 +193,14 @@ class NoseDjango(Plugin):
         # Ensure that nothing (eg. South) steals away our syncdb command
         management._commands['syncdb'] = 'django.core'
 
-        for connection in connections.all():
-            self.call_plugins_method(
-                'beforeTestDb', settings, connection, management)
-            connection.creation.create_test_db(verbosity=self.verbosity)
-            logger.debug("Running syncdb")
-            self._num_syncdb_calls += 1
-            self.call_plugins_method('afterTestDb', settings, connection)
+        if not self.reuse_db:
+            for connection in connections.all():
+                self.call_plugins_method(
+                    'beforeTestDb', settings, connection, management)
+                connection.creation.create_test_db(verbosity=self.verbosity)
+                logger.debug("Running syncdb")
+                self._num_syncdb_calls += 1
+                self.call_plugins_method('afterTestDb', settings, connection)
 
     def _should_use_transaction_isolation(self, test, settings):
         """
@@ -231,7 +243,7 @@ class NoseDjango(Plugin):
         use_transaction_isolation = self._should_use_transaction_isolation(
             test, settings)
 
-        if self._should_rebuild_schema(test):
+        if reuse_db and self._should_rebuild_schema(test):
             for connection in connections.all():
                 connection.creation.destroy_test_db(
                     self.old_db, verbosity=self.verbosity)
@@ -427,9 +439,10 @@ class NoseDjango(Plugin):
         from django.conf import settings
         from django.core.urlresolvers import clear_url_caches
 
-        self.call_plugins_method('beforeDestroyTestDb', settings, connection)
-        connection.creation.destroy_test_db(self.old_db, verbosity=self.verbosity)
-        self.call_plugins_method('afterDestroyTestDb', settings, connection)
+        if not self.reuse_db:
+            self.call_plugins_method('beforeDestroyTestDb', settings, connection)
+            connection.creation.destroy_test_db(self.old_db, verbosity=self.verbosity)
+            self.call_plugins_method('afterDestroyTestDb', settings, connection)
 
         self.call_plugins_method(
             'beforeTeardownTestEnv', settings, teardown_test_environment)
