@@ -244,7 +244,7 @@ class NoseDjango(Plugin):
         use_transaction_isolation = self._should_use_transaction_isolation(
             test, settings)
 
-        if reuse_db and self._should_rebuild_schema(test):
+        if self.reuse_db and self._should_rebuild_schema(test):
             for connection in connections.all():
                 connection.creation.destroy_test_db(
                     self.old_db, verbosity=self.verbosity)
